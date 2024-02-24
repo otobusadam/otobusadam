@@ -1,0 +1,2171 @@
+#encoding:utf-8
+
+import sys
+import os
+import random
+import time
+import threading
+
+import pygame
+
+
+class GameElements:
+    def __init__(self):
+        pass
+
+    def fifty_fifty(self):
+        rand = random.randint(0,10)
+        if rand < 5:
+            return True
+        else:
+            return False
+
+class GameManagement(GameElements):
+    def __init__(self):
+
+        self.default = Player("none",0,[0,0])
+        self.playerTurn = self.default
+        self.order = 0
+        self.board = Board()
+        self.onGame = True
+
+        self.darkSquare = Item(1, "null", True)
+        self.lightSquare = Item(0, "null", False)
+
+        for i in range(8):
+            for j in range(8):
+                if((i+j)%2 == 0):
+                    self.board.getBoard()[i][j] = self.lightSquare
+                else:
+                    self.board.getBoard()[i][j] = self.darkSquare
+
+        self.__DefaultTime = 300
+        self.__tour = 3
+        self.stopTimer = False
+
+#Player Management
+    def spawnItem(self,item):
+        item.spawn(setLocation)
+
+    def getDefaultTime(self):
+        return self.__DefaultTime
+
+    def setDefaultTime(self,var):
+        self.__DefaultTime = int(var)
+        for player in self.getList():
+            player.setTime(self.__DefaultTime)
+
+    def get_tour(self):
+        return self.__tour
+
+    def set_tour(self,value):
+        self.__tour = value
+
+    def appendList(self,player):
+        self.default.getList().append(player)
+
+    def setDefaultPlayerTurn(self):
+        self.playerTurn = self.default.getList()[0]
+        self.playerTurn.setGameState(True)
+
+    def getList(self):
+        return self.default.getList()
+
+    def resetSquare(self,location):
+        if ((location[0] + location[1]) % 2 == 0):
+            self.board.getBoard()[location[1]][location[0]] = self.lightSquare
+        else:
+            self.board.getBoard()[location[1]][location[0]] = self.darkSquare
+
+
+    def setTurn(self):
+        self.playerTurn.setGameState(False)
+        self.order += 1
+        self.order %= len(self.default.getList())
+        self.playerTurn = self.default.getList()[self.order]
+        self.playerTurn.setGameState(True)
+
+    def whoseTurn(self):
+        return self.playerTurn
+
+#Board Management
+    def resetGameBoard(self):
+        for i in range(8):
+            for j in range(8):
+                if((i+j)%2 == 0):
+                    self.board.getBoard()[i][j] = self.lightSquare
+                else:
+                    self.board.getBoard()[i][j] = self.darkSquare
+
+    def getGameBoard(self):
+        return self.board
+
+    def updateBoard(self, object):
+        x = object.getLocation()[0]
+        y = object.getLocation()[1]
+        self.resetSquare([x,y])
+        self.board.getBoard()[y][x] = object
+
+    def Localizator(self,bannedLocations, length):
+
+        tempoList = []
+        for item in bannedLocations:
+            tempoList.append(tuple(item))
+        tempoSet = set(tempoList)
+
+        locationsSet = set()
+        locationList = []
+        while (length != len(locationsSet)):
+            for i in range(length-len(locationsSet)):
+                x = random.randint(0, 7)
+                y = random.randint(0, 7)
+                locationsSet.add((x, y))
+            locationsSet = locationsSet.difference(tempoSet)
+
+        for item in locationsSet:
+            locationList.append(list(item))
+        return locationList
+
+    def getPossibleMoves(self):
+        self.board.getPossibleMoves(self.playerTurn)
+
+    def move(self,position):
+        self.board.move(position,self.playerTurn)
+
+
+    def printBoard(self):
+        for i in range(len(self.board.getBoard())):
+            tempList = []
+            for j in range(len(self.board.getBoard()[i])):
+                tempList.append(self.board.getBoard()[i][j].getName())
+            print(tempList)
+
+
+#Determines how many moves a player can move at once
+    def moveChance(self):
+        rate = random.randint(0,100)
+        move = 0
+        if (rate >= 0) & (rate < 5):
+            move = 4
+        elif (rate >= 5) & (rate < 25):
+            move = 3
+        elif (rate >= 25) & (rate < 55):
+            move = 2
+        else:
+            move = 1
+        return move
+
+#Time Management
+    def gameCountdown(self):
+      if self.playerTurn.ifInGame():
+        while self.playerTurn.getPlayerTimer() != 0:
+            time.sleep(1)
+            self.playerTurn.countTimer()
+            if self.stopTimer:
+               break
+
+
+class GameMode(GameElements):
+
+    def __init__(self,name):
+        self.gameList = []
+        self.gameList.append(self)
+
+
+class Player(GameElements):
+    def __init__(self,name,appereance,location):
+        self.PlayerList = []
+
+        __toofGetName = "Toof"
+        __staveGetName = "Stave"
+        __noneName = "none"
+        location = [location[0]%8,location[1]%8]
+
+        self.name = name
+        self.appereance = appereance
+        self.location = location
+        self.inventory = []
+
+        self.timer = 150
+        self.isInGame = False
+
+        self.__point = 0
+
+#Classic arrengements of the class
+    def getName(self):
+        return self.name
+
+    def getAppereance(self):
+        return self.appereance
+
+    def getLocation(self):
+        return self.location
+
+    def getInventory(self):
+        return self.inventory
+
+    def getPoint(self):
+        return self.__point
+
+    def setPoint(self, value):
+        self.__point = 0
+
+    def addPoint(self,value):
+        self.__point += value
+
+
+    def ifInGame(self):
+        return self.isInGame
+
+    def setGameState(self,boole):
+        self.isInGame = boole
+
+    def addInventory(self,item):
+        if len(self.inventory) <= 10:
+            self.inventory.append(item)
+
+    def setName(self,newName):
+        self.name = newName
+
+    def setAppereance(self,newAppereance):
+        self.appereance = newAppereance
+
+    def setLocation(self,newLocation):
+        self.location = newLocation
+
+    def getList(self):
+        return self.PlayerList
+
+    def coincidenceCheck(self,player):
+        if self.getLocation() == player.getLocation():
+            return True
+        else:
+            return False
+
+    def getPlayerTimer(self):
+        return self.timer
+
+    def getTimeText(self):
+        min = int(self.timer/60)
+        sec = self.timer%60
+        if sec < 10:
+            sect = str("0" + str(sec))
+        else:
+            sect = str(sec)
+        text = str(min) + ":" + str(sect)
+        return text
+    def countTimer(self):
+        self.timer -= 1
+
+    def setTime(self,newValue):
+        self.timer = newValue
+
+
+class Item(GameElements):
+    def __init__(self,character,location,isVisible):
+        self.character = character
+        self.location = location
+        self.isVisible = isVisible
+
+
+    def getVisible(self):
+        return self.isVisible
+
+    def getLocation(self):
+        return self.location
+
+    def getName(self):
+        return self.character
+
+    def setLocation(self,location):
+        self.location = location
+
+    def setVisible(self,bool):
+        self.isVisible = bool
+
+    def spawn(self, func):
+        x = 0
+        y = 0
+
+        x = random.randint(0,7)
+        y = random.randint(0,7)
+
+        func([x,y])
+
+    def capture(self, player):
+        if player.getLocation() == self.location:
+            player.addInventory(self)
+            self.isVisible = False
+
+    def itemazor(self,itemList,bannedLocations):
+        mng = GameManagement()
+        coList = mng.Localizator(bannedLocations,len(itemList))
+        mainList = []
+
+        for i in range(len(itemList)):
+            item = Item(itemList[i],coList[i],True)
+            mainList.append(item)
+
+        return mainList
+
+
+class BattleField(GameMode):
+    def __init__(self):
+        pass
+
+class Board(GameMode):
+
+    def __init__(self):
+        board = [[0, 1, 0, 1, 0, 1, 0, 1], [1, 0, 1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1, 0, 1],
+                 [1, 0, 1, 0, 1, 0, 1, 0], [0, 1, 0, 1, 0, 1, 0, 1], [1, 0, 1, 0, 1, 0, 1, 0],
+                 [0, 1, 0, 1, 0, 1, 0, 1], [1, 0, 1, 0, 1, 0, 1, 0]]
+        coBoard = [[0,0,0,0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0,0, 0, 0, 0, 0],
+                 [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0],
+                 [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
+
+        boardElements = []
+
+        self.__board = board
+        self.__coBoard = coBoard
+        self.__boardElements = boardElements
+
+        self.__superMove = Item("(SM)",[0,0],False)
+        self.__gcmove = Item("(GC)",[0,0],False)
+
+    def getBoard(self):
+        return self.__board
+
+    def super_move(self):
+        return self.__superMove
+
+    def gcmove(self):
+        return self.__gcmove
+
+    def getCoBoard(self):
+        return self.__getCoBoard
+
+    def accessItem(self,i,j):
+        return self.__coBoard[i][j]
+
+    def resetItem(self,x_axis,y_axis):
+        self.__coBoard[x_axis][y_axis] = 0
+
+    def resetCoBoard(self):
+        self.__coBoard = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
+
+    def prepareBoard(self,list):
+        for i in range(len(self.__coBoard)):
+            for j in range(len(self.__coBoard[i])):
+                for item in list:
+                    if (item.getLocation() == [i,j]):
+                        self.__coBoard[i][j] = item
+
+    def get_super_move(self,player):
+
+        board_coor = []
+        for i in range(8):
+            for j in range(8):
+                board_coor.append((i,j))
+
+        tempList = []
+        for i in range(8):
+                for sign in [-1,1]:
+                    tempList.append((player.getLocation()[0]+sign*i, player.getLocation()[1]+sign*i))
+                    tempList.append((player.getLocation()[0]+sign*i, player.getLocation()[1]-sign*i))
+                    tempList.append(((player.getLocation()[0]+sign*i)%8,(player.getLocation()[1])%8))
+                    tempList.append(((player.getLocation()[0]) % 8, (player.getLocation()[1] + sign * i) % 8))
+
+        sec_list = []
+        for element in tempList:
+            if element in board_coor:
+                sec_list.append(element)
+
+        return list(set(sec_list))
+
+    def superMove(self,player,position):
+        player.setLocation(list(position))
+
+    def move(self,position,player):
+            if position == 1:
+                player.setLocation([player.getLocation()[0]-1,player.getLocation()[1]-2])
+            elif position == 2:
+                player.setLocation([player.getLocation()[0]-2,player.getLocation()[1]-1])
+            elif position == 3:
+                player.setLocation([player.getLocation()[0]-2,player.getLocation()[1]+1])
+            elif position == 4:
+                player.setLocation([player.getLocation()[0]-1,player.getLocation()[1]+2])
+            elif position == 5:
+                player.setLocation([player.getLocation()[0]+1,player.getLocation()[1]+2])
+            elif position == 6:
+                player.setLocation([player.getLocation()[0]+2,player.getLocation()[1]+1])
+            elif position == 7:
+                player.setLocation([player.getLocation()[0]+2,player.getLocation()[1]-1])
+            elif position == 8:
+                player.setLocation([player.getLocation()[0]+1,player.getLocation()[1]-2])
+            else:
+                print("Move is undefined")
+            player.setLocation([player.getLocation()[0]%8,player.getLocation()[1]%8])
+
+    def getPossibleMoves(self,player):
+        list = []
+        if (player.getLocation()[0] >= 1) & (player.getLocation()[1] >= 2):
+            list.append(1)
+        if (player.getLocation()[0] >= 2) & (player.getLocation()[1] >= 1):
+            list.append(2)
+        if (player.getLocation()[0] >= 2) & (player.getLocation()[1] <= 6):
+            list.append(3)
+        if (player.getLocation()[0] >= 1) & (player.getLocation()[1] <= 5):
+            list.append(4)
+        if (player.getLocation()[0] <= 6) & (player.getLocation()[1] <= 5):
+            list.append(5)
+        if (player.getLocation()[0] <= 5) & (player.getLocation()[1] <= 6):
+            list.append(6)
+        if (player.getLocation()[0] <= 5) & (player.getLocation()[1] >= 1):
+            list.append(7)
+        if (player.getLocation()[0] <= 6) & (player.getLocation()[1] >= 2):
+            list.append(8)
+        return list
+
+    #Same functions as above but for UI
+    def getPossibleSquares(self,player,player_rect):
+        list = []
+        if (player.getLocation()[0] >= 1) & (player.getLocation()[1] >= 2):
+            list.append([player_rect[0]-100,player_rect[1]-200])
+        if (player.getLocation()[0] >= 2) & (player.getLocation()[1] >= 1):
+            list.append([player_rect[0]-200,player_rect[1]-100])
+        if (player.getLocation()[0] >= 2) & (player.getLocation()[1] <= 6):
+            list.append([player_rect[0]-200,player_rect[1]+100])
+        if (player.getLocation()[0] >= 1) & (player.getLocation()[1] <= 5):
+            list.append([player_rect[0]-100,player_rect[1]+200])
+        if (player.getLocation()[0] <= 6) & (player.getLocation()[1] <= 5):
+            list.append([player_rect[0]+100,player_rect[1]+200])
+        if (player.getLocation()[0] <= 5) & (player.getLocation()[1] <= 6):
+            list.append([player_rect[0]+200,player_rect[1]+100])
+        if (player.getLocation()[0] <= 5) & (player.getLocation()[1] >= 1):
+            list.append([player_rect[0]+200,player_rect[1]-100])
+        if (player.getLocation()[0] <= 6) & (player.getLocation()[1] >= 2):
+            list.append([player_rect[0]+100,player_rect[1]-200])
+        return list
+
+
+#One of game modes.
+class WordGame(GameMode):
+    def __init__(self):
+        self.alfabet = ["A", "B", "C", "Ç", "D", "E", "F", "G", "Ğ", "H", "I", "İ", "J", "K", "L", "M", "N", "O", "Ö", "P", "R", "S", "Ş", "T", "U", "Ü", "V", "Y", "Z"]
+        self._vowel = ["A","E","I","İ","O","Ö","U","Ü"]
+        self._consonant = ["B", "C", "Ç", "D", "F", "G", "Ğ", "H", "J", "K", "L", "M", "N", "P", "R", "S", "Ş", "T", "V", "Y", "Z"]
+        self._dictionary = open("764821774WordList.txt", encoding='utf8').readlines()
+        self.__specials = ("kangal")
+        #Special Power for Word Game
+        self.Joker = Item("(JJ)",[0,0],False)
+
+    def getDict(self):
+        return self._dictionary
+
+    def checkDictionary(self,value):
+        bool = False
+        for word in self._dictionary:
+            if word == value.lower() + "\n" :
+                bool = True
+                break
+            elif word == value.lower() + " " + "\n":
+                bool = True
+                break
+        for spec in self.__specials:
+            if spec == value.lower():
+                bool = True
+                break
+        return bool
+
+    def getPoints(self,value):
+        point = 0
+        for letter in list(value):
+                point += 5
+
+        for spec in self.__specials:
+            if spec == value.lower():
+                point = 60
+
+        if self.checkDictionary(value):
+            return float(point)
+        else:
+            return 0
+
+    def genLetters(self):
+        i = len(self._vowel)
+        k = len(self._consonant)
+        letlist = []
+        for j in range(8):
+            x = random.randint(0,i-1)
+            letlist.append(self._vowel[x])
+
+        for j in range(8):
+            x = random.randint(0, k-1)
+            letlist.append(self._consonant[x])
+        return letlist
+
+class NumGame(GameMode):
+    def __init__(self):
+        pass
+
+    def generateNums(self):
+        num_1 = random.randint(1,100)
+        num_2 = random.randint(1,100)
+        num_3 = random.randint(1,100)
+        list = [[num_1,num_2,num_3]]
+        conclusion = 0
+        radical = []
+        for i in list[0]:
+            x = random.randint(0, 2)
+            if (x == 0):
+                conclusion += i
+                radical.append("+")
+            elif (x == 1):
+                conclusion -= i
+                radical.append("-")
+            else:
+                conclusion *= i
+                radical.append("x")
+
+        list.append(radical)
+        list.append([conclusion])
+
+        return tuple(list)
+
+    def getPoints(self,problem,solution):
+        if problem == 0:
+            return 50
+        else:
+            pay = max(problem-solution,solution-problem)
+            payda = max(problem,0-problem)
+            return float(100 - pay*100/payda)
+
+class CrypGame(WordGame):
+    Hint: Item
+
+    def __init__(self,key,type):
+        super().__init__()
+        self.type = type
+        self.key = key
+        self.Hint = Item("(HI)",[0,0],False)
+
+        self._code = {}
+        for a in self.alfabet:
+            self._code.update({a : self.alfabet[int(self.alfabet.index(a) + key)%len(self.alfabet)]})
+
+    def genCode(self):
+        try:
+            word = self.getDict()[random.randint(0,len(self.getDict())-1)]
+        except:
+            pass
+        wordL = list(word)
+        wordL.pop()
+
+        newSTR = ""
+        for letter in wordL:
+            if letter.upper() in self.alfabet:
+                newSTR = newSTR + self._code[letter.upper()]
+            else:
+                newSTR = newSTR + " "
+
+        return [newSTR,word]
+
+    def codeWord(self,word):
+        wordL = list(word)
+
+        newSTR = ""
+        for letter in wordL:
+            if letter.upper() in self.alfabet:
+                newSTR = newSTR + self._code[letter.upper()]
+            else:
+                newSTR = newSTR + " "
+
+        return newSTR
+
+    def getPoints(self,value):
+        if self.checkDictionary(value):
+            return 100
+        else:
+            return 0
+
+    def changeKey(self,new_key):
+        self.key = new_key
+#GUI Management
+class FrameManagement():
+    def __init__(self,listOFrames):
+        if type(listOFrames) != type([]):
+            print("Frame Management: Value must be a list of frames")
+        elif listOFrames == []:
+            print("Empty list is not accepted")
+        else:
+            self.__order = listOFrames
+            self.__primerFrame = listOFrames[0]
+
+    def fprimerFrame(self):
+        self.__primerFrame = self.__order[0]
+        return self.__primerFrame
+
+    def changeOrder(self):
+        try:
+            sup = self.__order[0]
+            supList = []
+            for i in range(len(self.__order) - 1):
+                if i < len(self.__order) - 1:
+                    supList.insert(i, self.__order[i + 1])
+
+            supList.append(sup)
+            self.__order = supList
+        except:
+            print("Out Of Index Error")
+
+    def setPrimerFrame(self,newFrame):
+        self.__primerFrame = newFrame
+
+    def frameOrder(self):
+        return len(self.__order)
+
+#Button Management
+class Button():
+    def __init__(self, image, pos, text_input, font , base_color, hovering_color):
+        if image is not None:
+            self.image = pygame.image.load(image)
+        else:
+            self.image = image
+        self.backUp = image
+        self.font = font
+        self.base_color = base_color
+        self.hovering_color = hovering_color
+        self.text_input = text_input
+        self.text = self.font.render(self.text_input, True, self.base_color)
+        self.visible = True
+        if self.image is None:
+            self.image = self.text
+        self.x_pos = pos[0]
+        self.y_pos = pos[1]
+        self.rect = self.image.get_rect(center=(self.x_pos, self.y_pos))
+        self.text_rect = self.text.get_rect(center=(self.x_pos, self.y_pos))
+    def update(self,screen):
+        if self.visible:
+            if self.image is not None:
+                screen.blit(self.image, self.rect)
+            screen.blit(self.text, self.text_rect)
+    def checkForInput(self, position):
+                if position[0] in range(self.rect.left, self.rect.right) and position[1] in range(self.rect.top, self.rect.bottom):
+                    return True
+                else:
+                    return False
+
+    def setVisible(self,bool):
+        self.visible = bool
+
+    def changeColor(self, position):
+                if position[0] in range(self.rect.left, self.rect.right) and position[1] in range(self.rect.top, self.rect.bottom):
+                    self.text = self.font.render(self.text_input, True, self.hovering_color)
+                else:
+                    self.text = self.font.render(self.text_input, True, self.base_color)
+class Window():
+    def __init__(self):
+        pygame.init()
+        pygame.mixer.init()
+
+        self.screen = pygame.display.set_mode((self.width(),self.height()),pygame.FULLSCREEN)
+        pygame.display.set_caption("Toof & Stave")
+        iconTitle = pygame.image.load('UIFolder//Assets//Background.png')
+        iconTitle = pygame.transform.scale(iconTitle, (self.width(),self.height()))
+
+        self.__gameOrder = ["Board","Word","Number","Decoding","endScene"]
+        self.__defaultTime = 150
+        self.__musicOn = True
+        self.__isWaiting = False
+
+
+        while True:
+            for event in pygame.event.get():
+                self.screen.fill("Black")
+                rect = iconTitle.get_rect()
+                rect.center = self.width()/2, self.height()/2
+                self.screen.blit(iconTitle,rect)
+
+                self.__MenuKey = False
+
+                buttonList = []
+
+                self.player_1 = Player("Toof", 0, [0, 0])
+                self.player_2 = Player("Stave", 0, [7, 7])
+
+                self.player_1.addInventory(WordGame().Joker)
+                self.player_2.addInventory(WordGame().Joker)
+
+                playButton = Button(None, (self.width() / 2, 2*self.height() / 7), "Oyna", self.getFont(50), "Orange",
+                                "Yellow")
+                quitButton = Button(None, (self.width() / 2, 5*self.height() / 7), "Çıkış", self.getFont(50), "Orange",
+                                "Yellow")
+                optionButton = Button(None, (self.width()/2, 3*self.height()/7), "Ayarlar", self.getFont(50), "Orange",
+                                      "Yellow")
+                infoButton = Button(None, (self.width()/2, 4*self.height()/7), "Bilgi", self.getFont(50), "Orange",
+                                      "Yellow")
+
+                buttonList.append(playButton)
+                buttonList.append(quitButton)
+                buttonList.append(optionButton)
+                buttonList.append(infoButton)
+
+                for button in buttonList:
+                    button.update(self.screen)
+                    if button.checkForInput(pygame.mouse.get_pos()):
+                        button.changeColor(pygame.mouse.get_pos())
+                        button.update(self.screen)
+
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    #Start Playing
+                    if playButton.checkForInput(pygame.mouse.get_pos()):
+                        frame_mng = FrameManagement(self.__gameOrder)
+                        for i in range(frame_mng.frameOrder()):
+                            if frame_mng.fprimerFrame() == "Board":
+                                self.loadScene()
+                                self.play_board()
+                                if self.__MenuKey:
+                                    break
+                            elif frame_mng.fprimerFrame() == "Word":
+                                self.loadScene()
+                                self.play_word()
+                                if self.__MenuKey:
+                                    break
+                            elif frame_mng.fprimerFrame() == "Number":
+                                self.loadScene()
+                                self.play_number()
+                                if self.__MenuKey:
+                                    break
+                            elif frame_mng.fprimerFrame() == "battleField":
+                                self.loadScene()
+                                self.play_battleField()
+                                if self.__MenuKey:
+                                    break
+                            elif frame_mng.fprimerFrame() == "Decoding":
+                                self.loadScene()
+                                self.play_codeGame()
+                                if self.__MenuKey:
+                                    break
+                            elif frame_mng.fprimerFrame() == "endScene":
+                                self.endScene()
+                            else:
+                                pass
+                            frame_mng.changeOrder()
+
+                    if quitButton.checkForInput(pygame.mouse.get_pos()):
+                        self.quitButton()
+
+                    if optionButton.checkForInput(pygame.mouse.get_pos()):
+                        self.optionPane()
+
+                    if infoButton.checkForInput(pygame.mouse.get_pos()):
+                        self.infoButton()
+
+                pygame.display.update()
+
+    def getFont(self, size):  # Returns Press-Start-2P in the desired size
+        return pygame.font.Font("UIFolder//Assets//font.ttf", size)
+
+    def height(self):
+        info = pygame.display.Info()
+        return info.current_h
+
+    def width(self):
+        info = pygame.display.Info()
+        return info.current_w
+
+    def play_board(self):
+        backButActivated = False
+        management = GameManagement()
+        word = WordGame()
+        item = Item("",[0,0],False)
+        cryp = CrypGame(0,"None")
+
+        jokerLock = False
+        moveLock = False
+
+        #Super Move Key Controller
+        superMoveActivated = [False, True]
+        SMIndex = 0
+
+        #Move Counter
+        prob = 0
+
+        moveActivated = [False,True]
+        MIndex = 0
+
+        #Collatable Item onto Board
+        charList = item.itemazor(word.genLetters(),[[0,0],[7,7]])
+
+        collactable = []
+        for chars in charList:
+            collactable.append(chars)
+
+
+        locList = []
+        for location in charList:
+            locList.append(location.getLocation())
+
+        timer_func = threading.Thread(target=management.gameCountdown)
+
+        # Create Players
+        toof = self.player_1
+        stave = self.player_2
+
+        management.appendList(toof)
+        management.appendList(stave)
+
+        management.setDefaultPlayerTurn()
+        management.setDefaultTime(self.__defaultTime)
+
+        timer_func.start()
+        chance = management.moveChance()
+
+        gameEnded = False
+        mouseClick = False
+        moveable = False
+
+        #Music
+        music1 = pygame.mixer.Sound("UIFolder/Sounds/board/Ayrlk.mp3")
+        music1.set_volume(0.1)
+
+        #Sound Effects
+        slap = pygame.mixer.Sound("UIFolder/Sounds/board/slap.mp3")
+        punch = pygame.mixer.Sound("UIFolder/Sounds/board/punch.mp3")
+        sound1 = pygame.mixer.Sound("UIFolder/Sounds/board/sound1.mp3")
+        sound2 = pygame.mixer.Sound("UIFolder/Sounds/board/sound2.mp3")
+        sound3 = pygame.mixer.Sound("UIFolder/Sounds/board/sound3.mp3")
+        sound4 = pygame.mixer.Sound("UIFolder/Sounds/board/sound4.mp3")
+        sound5 = pygame.mixer.Sound("UIFolder/Sounds/board/sound5.mp3")
+
+        slap.set_volume(0.3)
+        punch.set_volume(0.3)
+        sound1.set_volume(0.4)
+        sound2.set_volume(0.1)
+        sound3.set_volume(0.4)
+        sound4.set_volume(0.4)
+        sound5.set_volume(0.4)
+
+        #Background
+        bg = pygame.image.load("UIFolder//Assets//Background.png")
+        bg = pygame.transform.scale(bg, (self.width(), self.height()))
+        bgr = bg.get_rect()
+        bgr.center = self.width() / 2, self.height() / 2
+
+        while not backButActivated:
+
+            self.screen.blit(bg,bgr)
+            board = management.getGameBoard()
+
+            if gameEnded:
+                break
+
+            pygame.draw.rect(self.screen,"Brown",pygame.Rect(self.width()/4-20,self.height()/25-20,840,840))
+            # Draw Board
+            for i in range(8):
+                for j in range(8):
+                    if (i+j)%2 == 0:
+                        pygame.draw.rect(self.screen,pygame.Color(255,230,255,255),
+                                         pygame.Rect(self.width()/4+100*j,self.height()/25+i*100,100,100))
+                    else:
+                        pygame.draw.rect(self.screen,pygame.Color(80,0,0,255),
+                                         pygame.Rect(self.width()/4+100*j,self.height()/25+i*100,100,100))
+
+            for char in collactable:
+                character = self.getFont(25).render(char.getName(), True, "Black")
+                character_rect = character.get_rect(center=(self.width() / 4 + char.getLocation()[0] * 100 + 50, self.height() / 25 + \
+                                         char.getLocation()[1] * 100 +50))
+                if char.getVisible():
+                    self.screen.blit(character, character_rect)
+
+            # Draw Players
+            if (toof.getLocation()[0] + toof.getLocation()[1]) % 2 == 0:
+                tfImage = pygame.image.load("UIFolder//Icon//Characters//Toof_Light_Eyed.png")
+            else:
+                tfImage = pygame.image.load("UIFolder//Icon//Characters//Toof_Normal.png")
+            stImage = pygame.image.load("UIFolder//Icon//Characters//Stave_Normal.png")
+
+            tfRect = tfImage.get_rect()
+            stRect = stImage.get_rect()
+
+            tfRect.topleft = self.width() / 4 + toof.getLocation()[0] * 100, self.height()/25 + toof.getLocation()[1] * 100
+            stRect.topleft = self.width() / 4 + stave.getLocation()[0] * 100, self.height()/25 + stave.getLocation()[1] * 100
+
+            toof.setAppereance(tfRect)
+            stave.setAppereance(stRect)
+
+            #Quick Button Codes
+            if mouseClick:
+                if management.whoseTurn() == toof:
+                    tfButton = Button('UIFolder//Icon//Characters//Toof_Normal.png', (pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]), " ",
+                                  self.getFont(0),
+                                  "White", "White")
+                if management.whoseTurn() == stave:
+                    stButton = Button('UIFolder//Icon//Characters//Stave_Normal.png', (pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]), " ",
+                                  self.getFont(0),
+                                  "White", "White")
+
+            else:
+                tfButton = Button('UIFolder//Icon//Characters//Toof_Normal.png', (tfRect[0] + 50, tfRect[1] + 50), " ",
+                                  self.getFont(0),
+                                  "White", "White")
+                stButton = Button('UIFolder//Icon//Characters//Stave_Normal.png', (stRect[0] + 50, stRect[1] + 50), " ",
+                                  self.getFont(0),
+                                  "White", "White")
+
+            tfButton.update(self.screen)
+            stButton.update(self.screen)
+
+
+            self.screen.blit(tfImage, tfRect)
+            self.screen.blit(stImage, stRect)
+
+            #Time Table
+            for player in [toof,stave]:
+                if player.getPlayerTimer() > management.getDefaultTime()/2:
+                    timeText = self.getFont(50).render(player.getTimeText(), True, "Green")
+                elif player.getPlayerTimer() > 60 and player.getPlayerTimer() <= management.getDefaultTime()/2:
+                    timeText = self.getFont(50).render(player.getTimeText(), True, "Yellow")
+                else:
+                    timeText = self.getFont(50).render(player.getTimeText(), True, "Red")
+                time_rect = timeText.get_rect(center=(self.width()/4+1000,self.height()/25+50*([toof,stave].index(player))*14+50))
+                self.screen.blit(timeText,time_rect)
+
+            #Chance Table
+            chanceText = self.getFont(20).render("Hamle hakkı: " + str(chance), True, "Yellow")
+            chance_rect = chanceText.get_rect(center=(self.width()/4-200,self.height()/25+50))
+            self.screen.blit(chanceText,chance_rect)
+
+            #Turn Table
+            turnText = self.getFont(20).render("Sıra: " + str(management.whoseTurn().getName()),True,"Green")
+            turn_rect = turnText.get_rect(center=(self.width() / 4 - 200, self.height() / 25 + 250))
+            self.screen.blit(turnText,turn_rect)
+
+            #Inventory Table - Score Table
+            for player in [toof,stave]:
+                tempInv = ""
+                for letter in player.getInventory():
+                    tempInv = tempInv + str(letter.getName())
+                invenText = self.getFont(10).render(tempInv, True, "Yellow")
+                inventory_rect = invenText.get_rect(center=(self.width()/4+1000,self.height()/25+50*([toof,stave].index(player))*12+100))
+                self.screen.blit(invenText,inventory_rect)
+
+                tempPoint = player.getName() + " - Skor: " + str(player.getPoint())
+                pText = self.getFont(10).render(tempPoint, True, "Orange")
+                pTextR = pText.get_rect(center=(self.width()/4+1000,50 + self.height()/25+50*([toof,stave].index(player))*10+100))
+                self.screen.blit(pText,pTextR)
+
+
+            #Moving a player
+            if moveActivated[MIndex]:
+                temList = management.getGameBoard().getPossibleSquares(management.whoseTurn(),
+                                                                       management.whoseTurn().getAppereance().topleft)
+
+                for pos in temList:
+                    pygame.draw.circle(self.screen, pygame.Color(254, 160, 0, 70), (pos[0] + 50, pos[1] + 50), 15)
+                    if pygame.mouse.get_pos()[0] in range(pos[0], pos[0] + 100) and pygame.mouse.get_pos()[1] in range(
+                            pos[1], pos[1] + 100) and chance != 0:
+                        pygame.draw.circle(self.screen, pygame.Color(254, 90, 0, 255), (pos[0] + 50, pos[1] + 50), 15)
+                        for ev in pygame.event.get():
+                            if ev.type == pygame.MOUSEBUTTONDOWN:
+                                if management.whoseTurn().ifInGame():
+                                    management.getGameBoard().move(
+                                        management.getGameBoard().getPossibleMoves(management.whoseTurn())[
+                                            temList.index(pos)]
+                                        , management.whoseTurn())
+                                sound5.play()
+                                chance -= 1
+                                if management.whoseTurn() in locList:
+                                    locList.remove(management.whoseTurn())
+
+                            #Move by mouse
+                            if (mouseClick) and ((tfButton.x_pos in range(pos[0], pos[0]+100) and tfButton.y_pos in range(pos[1],pos[1]+100)) or (stButton.x_pos in range(pos[0], pos[0]+100) and stButton.y_pos in range(pos[1],pos[1]+100))):
+                                if management.whoseTurn().ifInGame():
+                                    management.getGameBoard().move(
+                                        management.getGameBoard().getPossibleMoves(management.whoseTurn())[
+                                            temList.index(pos)]
+                                        , management.whoseTurn())
+                                    MIndex = 0
+                                    moveable = False
+                                sound5.play()
+                                chance -= 1
+                                if management.whoseTurn() in locList:
+                                    locList.remove(management.whoseTurn())
+            #Super Move
+            if superMoveActivated[SMIndex]:
+                temList_sec = management.getGameBoard().get_super_move(management.whoseTurn())
+                for pos in temList_sec:
+                    pygame.draw.circle(self.screen,pygame.Color(0,150,0,255),
+                                       (self.width()/4 + pos[0]*100 + 50,self.height()/25 + pos[1]*100 + 50),15)
+                    if pygame.mouse.get_pos()[0] in range(int(self.width()/4) + pos[0]*100, int(self.width()/4) + pos[0]*100+100) and pygame.mouse.get_pos()[1] in range(int(self.height()/25) + pos[1]*100, int(self.height()/25) + pos[1]*100 +100) and chance != 0:
+                        pygame.draw.circle(self.screen, pygame.Color(0,100,0,255),
+                                           (self.width() / 4 + pos[0] * 100 + 50,
+                                            self.height() / 25 + pos[1] * 100 + 50), 15)
+                        for eventt in pygame.event.get():
+                            if eventt.type == pygame.MOUSEBUTTONDOWN and management.whoseTurn().ifInGame():
+                                management.getGameBoard().superMove(management.whoseTurn(),pos)
+                                SMIndex = (SMIndex+1)%2
+                                sound4.play()
+                                chance -= 1
+
+                                for els in management.whoseTurn().getInventory():
+                                    if els.getName() == "(SM)":
+                                        management.whoseTurn().getInventory().remove(els)
+                                        break
+
+            #Capture Item
+            for bItem in collactable:
+                if bItem.getLocation() == management.whoseTurn().getLocation():
+                    bItem.capture(management.whoseTurn())
+                    collactable.remove(bItem)
+                    locList.remove(bItem.getLocation())
+                    try:
+                        charList.remove(bItem)
+                    except:
+                        pass
+                    management.whoseTurn().addPoint(5)
+
+            #GCMove Captured
+            for gc in management.whoseTurn().getInventory():
+                if gc.getName() == board.gcmove().getName():
+                    management.whoseTurn().addPoint(-15)
+                    chance -= 1
+                    management.whoseTurn().getInventory().remove(gc)
+                    sound1.play()
+
+            #Coincidence Case
+            temPlayerList = management.getList()
+            if management.whoseTurn() in temPlayerList:
+                temPlayerList.remove(management.whoseTurn())
+                for playe_r in temPlayerList:
+                    if management.whoseTurn().coincidenceCheck(playe_r):
+                        if not jokerLock:
+                            coiJoker = WordGame().Joker
+                            management.whoseTurn().addInventory(coiJoker)
+                            jokerLock = True
+                            if management.whoseTurn() == toof:
+                                music1.play()
+
+                        if management.fifty_fifty():
+                            playe_r.setLocation([0, 0])
+                        else:
+                            playe_r.setLocation([7, 7])
+
+                        if management.fifty_fifty():
+                            slap.play()
+                        else:
+                            punch.play()
+
+            temPlayerList.append(management.whoseTurn())
+
+        #Change Player
+            if chance <= 0:
+                MIndex = 0
+                pCheck = management.whoseTurn()
+                while pCheck == management.whoseTurn():
+                    management.setTurn()
+                locList.append(toof.getLocation())
+                locList.append(stave.getLocation())
+                chance = management.moveChance()
+                sound2.play()
+
+                #Generate a Super Power
+                prob += 1
+                if prob%19 == 0:
+                    collactable.append(item.itemazor([board.super_move().getName()],locList)[0])
+                    locList.append(collactable[-1].getLocation())
+                elif prob%13 == 0:
+                    collactable.append(item.itemazor([word.Joker.getName()],locList)[0])
+                    locList.append(collactable[-1].getLocation())
+                elif prob%5 == 0:
+                    collactable.append(item.itemazor([board.gcmove().getName()],locList)[0])
+                    locList.append(collactable[-1].getLocation())
+                elif prob%17 == 0:
+                    collactable.append(item.itemazor([cryp.Hint.getName()],locList)[0])
+                    locList.append(collactable[-1].getLocation())
+                else:
+                    continue
+
+            for ev in pygame.event.get():
+                #Quit
+                if ev.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_s:
+                    for el in management.whoseTurn().getInventory():
+                        if el.getName() == "(SM)":
+                            SMIndex += 1
+                            SMIndex %= 2
+
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_m:
+                    MIndex += 1
+                    MIndex %= 2
+
+                if ev.type == pygame.MOUSEBUTTONDOWN:
+                    mouseClick = True
+                    if tfButton.checkForInput(pygame.mouse.get_pos()) and management.whoseTurn() == toof:
+                        MIndex += 1
+                        MIndex %= 2
+
+                    if stButton.checkForInput(pygame.mouse.get_pos()) and management.whoseTurn() == stave:
+                        MIndex += 1
+                        MIndex %= 2
+
+                if ev.type == pygame.MOUSEBUTTONUP:
+                    mouseClick = False
+
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_BACKSPACE:
+                    chance = 0
+
+                #Escape Key Options
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                    escapePressed = True
+                    self.__MenuKey = True
+                    while escapePressed:
+                        management.whoseTurn().setGameState(False)
+                        buttonList = []
+                        self.screen.fill("Black")
+                        backButton = Button(None, (self.width() / 2, 2 * self.height() / 5), "Menü",
+                                            self.getFont(40),
+                                            "White", "Red")
+                        optionButton = Button(None, (self.width() / 2, 3 * self.height() / 5), "Ayarlar",
+                                              self.getFont(40), "White", "Red")
+                        buttonList.append(backButton)
+                        buttonList.append(optionButton)
+
+                        for element in buttonList:
+                            element.update(self.screen)
+                            if element.checkForInput(pygame.mouse.get_pos()):
+                                element.changeColor(pygame.mouse.get_pos())
+                                element.update(self.screen)
+
+                        for ev_seconder in pygame.event.get():
+                            if ev_seconder.type == pygame.MOUSEBUTTONDOWN:
+                                if backButton.checkForInput(pygame.mouse.get_pos()):
+                                    backButActivated = True
+                                    escapePressed = False
+                                if optionButton.checkForInput(pygame.mouse.get_pos()):
+                                    self.optionPane()
+                            if ev_seconder.type == pygame.KEYDOWN and ev_seconder.key == pygame.K_ESCAPE:
+                                escapePressed = False
+                                self.__MenuKey = False
+                                management.whoseTurn().setGameState(True)
+                        pygame.display.update()
+            pygame.display.update()
+
+            if management.whoseTurn().getPlayerTimer() <= 0 or len(charList) == 0:
+                gameEnded = True
+
+            if management.whoseTurn().getPlayerTimer() <= 0:
+                indicator = random.randint(0,len(management.whoseTurn().getInventory())-1)
+                if len(management.whoseTurn().getInventory()) > 0:
+                    management.whoseTurn().getInventory().pop(indicator)
+                management.whoseTurn().addPoint(-75)
+
+        management.stopTimer = True
+        self.player_1 = toof
+        self.player_2 = stave
+        #End line of Board Game
+    def play_word(self):
+        backButActivated = False
+
+        toof = self.player_1
+        stave = self.player_2
+
+        counter = 0
+
+        management = GameManagement()
+
+        timer_func = threading.Thread(target=management.gameCountdown)
+        timer_func_sec = threading.Thread(target=management.gameCountdown)
+
+        management.appendList(toof)
+        management.appendList(stave)
+
+        management.setDefaultPlayerTurn()
+        management.setDefaultTime(60)
+
+        timer_func.start()
+
+        gameEnded = False
+        playEnded = False
+        shiftkey = False
+
+        wordCreated = []
+        letterUsed = []
+
+        Inv_Layer = []
+        for item in management.whoseTurn().getInventory():
+            if item.getName() in WordGame().alfabet:
+                Inv_Layer.append(item)
+            elif item.getName() == WordGame().Joker.getName():
+                Inv_Layer.append(item)
+
+        while not backButActivated:
+            self.screen.fill("Black")
+
+            #Player Name
+            p_name = self.getFont(25).render(management.whoseTurn().getName()+", sıra sende! " + management.whoseTurn().getTimeText(),True,"White")
+            p_text = p_name.get_rect(center=(self.width()/2,50))
+            self.screen.blit(p_name,p_text)
+
+            #Player Score
+            p_score = self.getFont(20).render("Skor: " + str(management.whoseTurn().getPoint()),True,"Orange")
+            p_scoreR = p_score.get_rect(center=(self.width()/2, self.height()/3-50))
+            self.screen.blit(p_score,p_scoreR)
+
+            if gameEnded:
+                break
+
+            tempInv = "Envanteriniz: "
+            for letter in Inv_Layer:
+                tempInv = tempInv + str(letter.getName())
+
+            for char in Inv_Layer:
+                invenText = self.getFont(50).render(tempInv, True, "White")
+                inventory_rect = invenText.get_rect(
+                    center=(self.width() / 2, 9*self.height()/10))
+                self.screen.blit(invenText, inventory_rect)
+
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                # Escape Key Options
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    escapePressed = True
+                    while escapePressed:
+                        self.__MenuKey = True
+                        management.whoseTurn().setGameState(False)
+                        buttonList = []
+                        self.screen.fill("Black")
+                        backButton = Button(None, (self.width() / 2, 2 * self.height() / 5), "Menü",
+                                            self.getFont(40),
+                                            "White", "Red")
+                        optionButton = Button(None, (self.width() / 2, 3 * self.height() / 5), "Ayarlar",
+                                              self.getFont(40), "White", "Red")
+                        buttonList.append(backButton)
+                        buttonList.append(optionButton)
+                        for element in buttonList:
+                            element.update(self.screen)
+                            if element.checkForInput(pygame.mouse.get_pos()):
+                                element.changeColor(pygame.mouse.get_pos())
+                                element.update(self.screen)
+                        for ev_seconder in pygame.event.get():
+                            if ev_seconder.type == pygame.MOUSEBUTTONDOWN:
+                                if backButton.checkForInput(pygame.mouse.get_pos()):
+                                    backButActivated = True
+                                    escapePressed = False
+                                if optionButton.checkForInput(pygame.mouse.get_pos()):
+                                    self.optionPane()
+                            if ev_seconder.type == pygame.KEYDOWN and ev_seconder.key == pygame.K_ESCAPE:
+                                escapePressed = False
+                                self.__MenuKey = False
+                                management.whoseTurn().setGameState(True)
+
+                        pygame.display.update()
+
+                if event.type == pygame.KEYDOWN:
+                    if not shiftkey:
+                        letterUsing = pygame.key.name(event.key).upper()
+                        for let in Inv_Layer:
+                            if let.getName() in WordGame().alfabet:
+                                if letterUsing == let.getName():
+                                    time.sleep(0.2)
+                                    wordCreated.append(letterUsing)
+                                    letterUsed.append(let)
+                                    Inv_Layer.remove(let)
+
+                    if  event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        shiftkey = True
+
+                    if shiftkey:
+                        if event.key == pygame.K_u:
+                            for let in Inv_Layer:
+                                    if let.getName() == "Ü":
+                                        time.sleep(0.2)
+                                        wordCreated.append("Ü")
+                                        letterUsed.append(let)
+                                        Inv_Layer.remove(let)
+                                        shiftkey = False
+
+                        if event.key == pygame.K_o:
+                            for let in Inv_Layer:
+                                    if let.getName() == "Ö":
+                                        time.sleep(0.2)
+                                        wordCreated.append("Ö")
+                                        letterUsed.append(let)
+                                        Inv_Layer.remove(let)
+                                        shiftkey = False
+                        if event.key == pygame.K_s:
+                            for let in Inv_Layer:
+                                    if let.getName() == "Ş":
+                                        time.sleep(0.2)
+                                        wordCreated.append("Ş")
+                                        letterUsed.append(let)
+                                        Inv_Layer.remove(let)
+                                        shiftkey = False
+                        if event.key == pygame.K_i:
+                            for let in Inv_Layer:
+                                    if let.getName() == "İ":
+                                        time.sleep(0.2)
+                                        wordCreated.append("İ")
+                                        letterUsed.append(let)
+                                        Inv_Layer.remove(let)
+                                        shiftkey = False
+                        if event.key == pygame.K_c:
+                            for let in Inv_Layer:
+                                    if let.getName() == "Ç":
+                                        time.sleep(0.2)
+                                        wordCreated.append("Ç")
+                                        letterUsed.append(let)
+                                        Inv_Layer.remove(let)
+                                        shiftkey = False
+                        if event.key == pygame.K_g:
+                            for let in Inv_Layer:
+                                    if let.getName() == "Ğ":
+                                        time.sleep(0.2)
+                                        wordCreated.append("Ğ")
+                                        letterUsed.append(let)
+                                        Inv_Layer.remove(let)
+                                        shiftkey = False
+                    if event.key == pygame.K_KP_0 or event.key == pygame.K_KP0 or event.key == pygame.K_0:
+                        for let in Inv_Layer:
+                            if let.getName() == WordGame().Joker.getName():
+                                JokerActivated = True
+                                if JokerActivated:
+                                    j_Info = self.getFont(30).render("Joker aktifleştirildi. Bir harf girin.",True,"Green")
+                                    j_Info_r = j_Info.get_rect(center=(self.width()/2,150))
+                                    self.screen.blit(j_Info,j_Info_r)
+                                tempLetter = ""
+                                while tempLetter == "" and JokerActivated:
+                                    for event_trisec in pygame.event.get():
+                                        if event_trisec.type == pygame.KEYDOWN:
+                                            tempLetter = pygame.key.name(event_trisec.key)
+                                            if tempLetter.upper() in WordGame().alfabet:
+                                                pass
+                                            else:
+                                                JokerActivated = False
+                                            if event_trisec.key == pygame.K_KP_0 or event_trisec.key == pygame.K_KP0 or event_trisec.key == pygame.K_0:
+                                                JokerActivated = False
+                                    pygame.display.update()
+
+                                if JokerActivated:
+                                    wordCreated.append(tempLetter.upper())
+                                    letterUsed.append(let)
+                                    Inv_Layer.remove(let)
+                                    JokerActivated = False
+
+                    if event.key == pygame.K_BACKSPACE:
+                        if wordCreated != []:
+                            wordCreated.pop()
+                        if letterUsed != []:
+                            Inv_Layer.append(letterUsed[-1])
+                            letterUsed.pop()
+
+                    if event.key == pygame.K_DELETE:
+                        if wordCreated != []:
+                            wordCreated.pop(0)
+                        if letterUsed != []:
+                            Inv_Layer.append(letterUsed[-1])
+                            letterUsed.pop(0)
+
+                    if event.key == pygame.K_SPACE:
+                        wordCreated.append(" ")
+
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                        if not self.__isWaiting:
+                            playEnded = True
+
+                if event.type == pygame.KEYUP:
+                    if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        shiftkey = False
+
+            str_word = ""
+            line = ""
+
+            for a in wordCreated:
+                str_word = str_word + a
+                line = line + "_"
+
+            wordText = self.getFont(50).render(str_word, True, "White")
+            lineText = self.getFont(50).render(line, True, "White")
+            info_text = self.getFont(20).render("Elinizdeki harfleri kullanarak bir kelime oluşturun.",True,"Gray")
+            info2_text = self.getFont(20).render("Tamamlamak için \"enter\" tuşuna basın.",True,"Gray")
+
+
+            word_rect = wordText.get_rect(
+                center=(self.width() / 2, self.height()/2))
+            lineRect = lineText.get_rect(
+                center=(self.width()/2, self.height()/2+25)
+            )
+            info_rect = info_text.get_rect(center=(self.width()/2,100))
+            info2_rect = info2_text.get_rect(center=(self.width()/2,150))
+
+            self.screen.blit(wordText, word_rect)
+            self.screen.blit(lineText, lineRect)
+            self.screen.blit(info_text,info_rect)
+            self.screen.blit(info2_text,info2_rect)
+
+            if management.whoseTurn().getPlayerTimer() <= 0:
+                playEnded = True
+
+            if self.__isWaiting == True:
+                self.__isWaiting = False
+
+            if playEnded:
+                management.whoseTurn().addPoint(WordGame().getPoints(str_word))
+                check = False
+                if management.whoseTurn().getPlayerTimer() <= 0:
+                    check = True
+                self.wait()
+                management.setTurn()
+                counter += 1
+                Inv_Layer = []
+                for item in management.whoseTurn().getInventory():
+                    if item.getName() in WordGame().alfabet:
+                        Inv_Layer.append(item)
+                    elif item.getName() == WordGame().Joker.getName():
+                        Inv_Layer.append(item)
+                wordCreated = []
+                letterUsed = []
+                if check:
+                    try:
+                        timer_func_sec.start()
+                    except:
+                        pass
+                    check = False
+                playEnded = False
+
+            if counter >= 2:
+                gameEnded = True
+
+#Check if word is invalid
+            method = WordGame()
+            notification = ""
+            notf_color = "white"
+            if(method.checkDictionary(str_word)):
+                notification = "Kelime Geçerli"
+                notf_color = "green"
+            else:
+                notification = "Kelime Geçersiz"
+                notf_color = "red"
+
+            notf_text = self.getFont(10).render(notification,True,notf_color)
+            notf_text_rect = notf_text.get_rect(center=(self.width()/2,self.height()/2+70))
+            self.screen.blit(notf_text,notf_text_rect)
+
+            pygame.display.update()
+
+        management.stopTimer = True
+        self.player_1 = toof
+        self.player_2 = stave
+        #End line of Word Game
+
+    def play_number(self):
+        backButActivated = False
+
+        toof = self.player_1
+        stave = self.player_2
+
+        counter = 0
+
+        management = GameManagement()
+
+        numg = NumGame()
+        problem = numg.generateNums()
+
+        solution = [[],[],[0]]
+
+        timer_funct = threading.Thread(target=management.gameCountdown)
+        timer_funct_sec = threading.Thread(target=management.gameCountdown)
+
+        management.appendList(toof)
+        management.appendList(stave)
+
+        management.setDefaultPlayerTurn()
+        management.setDefaultTime(60)
+
+        timer_funct.start()
+
+        gameEnded = False
+        playEnded = False
+
+        varButtonClicked = False
+
+        choosen = ""
+
+        index = 0
+
+        variable_st_vsb = ["",str(problem[0][0])]
+        vsb_index1 = 1
+
+        variable_nd_vsb = ["",str(problem[0][1])]
+        vsb_index2 = 1
+
+        variable_rd_vsb = ["",str(problem[0][2])]
+        vsb_index3 = 1
+
+        bg = pygame.image.load("UIFolder/Assets/NumberGameBG.png")
+        bg = pygame.transform.scale(bg, (self.width(),self.height()))
+        bgr = bg.get_rect(center=(self.width()/2,self.height()/2))
+
+        while not backButActivated:
+            self.screen.blit(bg,bgr)
+
+            # Player Score
+            p_score = self.getFont(20).render("Skor: " + str(management.whoseTurn().getPoint()), True, "Orange")
+            p_scoreR = p_score.get_rect(center=(self.width()/10, self.height()/3-50))
+            self.screen.blit(p_score, p_scoreR)
+
+            solButton = []
+            operator_st = Button(None,(4*self.width()/5,3*self.height()/7),"Topla",self.getFont(60),"White","Purple")
+            operator_nd = Button(None,(4*self.width()/5,4*self.height()/7),"Çıkar",self.getFont(60),"White","Purple")
+            operator_rd = Button(None, (4 * self.width() / 5, 5*self.height() / 7), "Çarp", self.getFont(60), "White",
+                                 "Purple")
+
+            variable_st = Button(None,(1*self.width()/5,5*self.height()/7),variable_st_vsb[vsb_index1],self.getFont(60),"White","Blue")
+            variable_nd = Button(None, (2 * self.width() / 5, 5 * self.height() / 7), variable_nd_vsb[vsb_index2],
+                                 self.getFont(60), "White", "Blue")
+            variable_rd = Button(None, (3*self.width() /10, 6 * self.height() / 7), variable_rd_vsb[vsb_index3],
+                                 self.getFont(60), "White", "Blue")
+
+            reset = Button(None,(4*self.width()/5,6*self.height()/7),"Sıfırla",self.getFont(60),"White","Purple")
+
+            solButton.append(operator_st)
+            solButton.append(operator_nd)
+            solButton.append(operator_rd)
+            solButton.append(variable_st)
+            solButton.append(variable_nd)
+            solButton.append(variable_rd)
+            solButton.append(reset)
+
+            p_name = self.getFont(25).render(
+                management.whoseTurn().getName() + ", senin sıran! " + management.whoseTurn().getTimeText(), True,
+                "White")
+
+            p_text = p_name.get_rect(center=(self.width() / 2, 50))
+
+            problem_text = self.getFont(15).render("Problem: [+,-,x] operatörlerini ve " + str(problem[0]) + " sayılarını kullanarak " +
+                                                   str(problem[2][0]) + " sonucuna ulaş.", True, "Yellow")
+            problem_rect = problem_text.get_rect(center=(self.width()/2,150))
+
+            tempNum = self.getFont(30).render("Seçilen Sayı: " + str(choosen),True,"Gray")
+            tempNum_rect = tempNum.get_rect(center = (self.width()/5,self.height()/2))
+
+            solution_text = "0 "
+            try:
+                for i in range(len(solution[1])):
+                    solution_text = solution_text + str(solution[1][i]) + " " + str(solution[0][i]) + " "
+                solution_text = solution_text + " = " + str(solution[2][0])
+            except:
+                pass
+
+            solTable = self.getFont(30).render(solution_text,True,"White")
+            solTable_rect = solTable.get_rect(center = (self.width()/2, self.height()/3))
+
+            self.screen.blit(solTable,solTable_rect)
+            self.screen.blit(tempNum, tempNum_rect)
+            self.screen.blit(p_name, p_text)
+            self.screen.blit(problem_text,problem_rect)
+
+            for btn in solButton:
+                btn.update(self.screen)
+                if btn.checkForInput(pygame.mouse.get_pos()):
+                    btn.changeColor(pygame.mouse.get_pos())
+                    btn.update(self.screen)
+
+            if gameEnded:
+                break
+
+            for event in pygame.event.get():
+                #Quit
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                #Enter Key Event
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                        if not self.__isWaiting:
+                            playEnded = True
+
+                #Mouse Button Event
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    MTD = pygame.mouse.get_pos()
+
+                    if operator_st.checkForInput(MTD):
+                        if varButtonClicked:
+
+                            solution[1].append("+")
+                            solution[0].append(choosen)
+                            solution[2][0] += solution[0][-1]
+                            choosen = 0
+                            varButtonClicked = False
+
+                    if operator_nd.checkForInput(MTD):
+                        if varButtonClicked:
+
+                            solution[1].append("-")
+                            solution[0].append(choosen)
+                            solution[2][0] -= solution[0][-1]
+                            choosen = 0
+                            varButtonClicked = False
+
+                    if operator_rd.checkForInput(MTD):
+                        if varButtonClicked:
+
+                            solution[1].append("x")
+                            solution[0].append(choosen)
+                            solution[2][0] *= solution[0][-1]
+                            choosen = 0
+                            varButtonClicked = False
+
+                    if variable_st.checkForInput(MTD):
+                        choosen = problem[0][0]
+                        vsb_index1 = 0
+                        varButtonClicked = True
+
+                    if variable_nd.checkForInput(MTD):
+                        choosen = problem[0][1]
+                        vsb_index2 = 0
+                        varButtonClicked = True
+
+                    if variable_rd.checkForInput(MTD):
+                        choosen = problem[0][2]
+                        vsb_index3 = 0
+                        varButtonClicked = True
+
+                    if reset.checkForInput(MTD):
+                        choosen = 0
+                        vsb_index1 = 1
+                        vsb_index2 = 1
+                        vsb_index3 = 1
+                        solution = [[],[],[0]]
+                        varButtonClicked = False
+
+                # Escape Key Options
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    escapePressed = True
+                    while escapePressed:
+                        self.__MenuKey = True
+                        management.whoseTurn().setGameState(False)
+                        buttonList = []
+                        self.screen.fill("Black")
+                        backButton = Button(None, (self.width() / 2, 2 * self.height() / 5), "Menü",
+                                            self.getFont(40),
+                                            "White", "Red")
+                        optionButton = Button(None, (self.width() / 2, 3 * self.height() / 5), "Ayarlar",
+                                              self.getFont(40), "White", "Red")
+                        buttonList.append(backButton)
+                        buttonList.append(optionButton)
+                        for element in buttonList:
+                            element.update(self.screen)
+                            if element.checkForInput(pygame.mouse.get_pos()):
+                                element.changeColor(pygame.mouse.get_pos())
+                                element.update(self.screen)
+                        for ev_seconder in pygame.event.get():
+                            if ev_seconder.type == pygame.MOUSEBUTTONDOWN:
+                                if backButton.checkForInput(pygame.mouse.get_pos()):
+                                    backButActivated = True
+                                    escapePressed = False
+                                if optionButton.checkForInput(pygame.mouse.get_pos()):
+                                    self.optionPane()
+                            if ev_seconder.type == pygame.KEYDOWN and ev_seconder.key == pygame.K_ESCAPE:
+                                escapePressed = False
+                                self.__MenuKey = False
+                                management.whoseTurn().setGameState(True)
+
+                        pygame.display.update()
+
+            if management.whoseTurn().getPlayerTimer() <= 0:
+                playEnded = True
+
+            if self.__isWaiting == True:
+                self.__isWaiting = False
+
+            if playEnded:
+
+                management.whoseTurn().addPoint(numg.getPoints(problem[2][0],solution[2][0]))
+                self.wait()
+                check = False
+                if management.whoseTurn().getPlayerTimer() <=0:
+                    check = True
+                counter += 1
+                management.setTurn()
+                problem = numg.generateNums()
+                solution = [[],[],[0]]
+
+                variable_st_vsb = ["", str(problem[0][0])]
+                vsb_index1 = 1
+                variable_nd_vsb = ["", str(problem[0][1])]
+                vsb_index2 = 1
+                variable_rd_vsb = ["", str(problem[0][2])]
+                vsb_index3 = 1
+                playEnded = False
+                if check:
+                    try:
+                        timer_funct_sec.start()
+                    except:
+                        pass
+                    check = False
+
+            if counter >= 2:
+                gameEnded = True
+            pygame.display.update()
+
+        management.stopTimer = True
+        self.player_1 = toof
+        self.player_2 = stave
+        #End line of Number Game
+
+    def play_codeGame(self):
+        key = random.randint(0,29)
+        cryp = CrypGame(key,"CE")
+        escaped = False
+        system = cryp.genCode()
+        problem = system[0]
+        answer = system[1]
+        solution = []
+        maxTime = 120
+        shiftkey = False
+        playEnded = False
+
+        counter = 0
+
+        toof = self.player_1
+        stave = self.player_2
+
+        management = GameManagement()
+        timer_func = threading.Thread(target=management.gameCountdown)
+        timer_func_sec = threading.Thread(target=management.gameCountdown)
+        management.appendList(toof)
+        management.appendList(stave)
+        management.setDefaultPlayerTurn()
+        management.setDefaultTime(maxTime)
+        timer_func.start()
+
+        background = pygame.image.load("UIFolder/Assets/DecodingBackground.png")
+        background = pygame.transform.scale(background,(self.width(),self.height()))
+        background_rect = background.get_rect(center=(self.width()/2,self.height()/2))
+
+        while not escaped:
+            self.screen.fill("Black")
+            self.screen.blit(background,background_rect)
+
+            # Player Score
+            p_score = self.getFont(20).render("Skor: " + str(management.whoseTurn().getPoint()), True, "Orange")
+            p_scoreR = p_score.get_rect(center=(self.width() / 2, self.height() / 3))
+            self.screen.blit(p_score, p_scoreR)
+
+            sols = ""
+            for leet in solution:
+                sols = sols + leet
+
+            for hint in management.whoseTurn().getInventory():
+                if hint.getName() == cryp.Hint.getName():
+                    solution.append(list(answer)[0].upper())
+                    management.whoseTurn().getInventory().remove(hint)
+
+            #Word Table
+            info = self.getFont(25).render("("+str(management.whoseTurn().getName())+")"+" Şifreyi Çöz " + management.whoseTurn().getTimeText(),True,"Yellow")
+            info_r = info.get_rect(center=(self.width()/2,self.height()/8))
+
+            text = self.getFont(50).render(problem,True,"White")
+            text_r = text.get_rect(center=(self.width()/2,self.height()/4))
+
+            #Finish Frame
+            fin = self.getFont(30).render("Tahmininiz bittiğinde \"ENTER\" tuşuna basınız.",True,"Orange")
+            fin_r = fin.get_rect(center=(self.width()/2,7*self.height()/8))
+
+            sol = self.getFont(50).render(sols,True,"Gray")
+            sol_r = sol.get_rect(center=(self.width()/2,self.height()/2))
+
+            self.screen.blit(info,info_r)
+            self.screen.blit(text,text_r)
+            self.screen.blit(sol,sol_r)
+            self.screen.blit(sol,sol_r)
+            self.screen.blit(fin,fin_r)
+
+            #Escape / Skip
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        escaped = True
+                    if not shiftkey:
+                        letterUsing = pygame.key.name(event.key).upper()
+                        if letterUsing in cryp.alfabet:
+                            time.sleep(0.2)
+                            solution.append(letterUsing)
+
+                    if event.key == pygame.K_LSHIFT or event.key == pygame.K_RSHIFT:
+                        shiftkey = True
+
+                    if event.key == pygame.K_SPACE:
+                        time.sleep(0.2)
+                        solution.append(" ")
+
+                    if shiftkey:
+                        if event.key == pygame.K_u:
+                                        time.sleep(0.2)
+                                        solution.append("Ü")
+                                        shiftkey = False
+
+                        if event.key == pygame.K_o:
+                                        time.sleep(0.2)
+                                        solution.append("Ö")
+                                        shiftkey = False
+                        if event.key == pygame.K_s:
+                                        time.sleep(0.2)
+                                        solution.append("Ş")
+                                        shiftkey = False
+                        if event.key == pygame.K_i:
+                                        time.sleep(0.2)
+                                        solution.append("İ")
+                                        shiftkey = False
+                        if event.key == pygame.K_c:
+                                        time.sleep(0.2)
+                                        solution.append("Ç")
+                                        shiftkey = False
+                        if event.key == pygame.K_g:
+                                        time.sleep(0.2)
+                                        solution.append("Ğ")
+                                        shiftkey = False
+
+                    if event.key == pygame.K_BACKSPACE:
+                        try:
+                            solution.pop()
+                        except:
+                            pass
+
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                        if not self.__isWaiting:
+                            playEnded = True
+                            management.whoseTurn().addPoint(cryp.getPoints(sols))
+
+            if management.whoseTurn().getPlayerTimer() <= 0:
+                playEnded = True
+                timer_func_sec.start()
+
+            if self.__isWaiting == True:
+                self.__isWaiting = False
+
+            if playEnded:
+                if cryp.checkDictionary(sols):
+                    management.whoseTurn().addPoint(100)
+                self.wait()
+                for hinnt in management.whoseTurn().getInventory():
+                    if hinnt.getName() == cryp.Hint.getName():
+                        management.whoseTurn().getInventory().remove(hinnt)
+                management.setTurn()
+                counter += 1
+                key = random.randint(0,29)
+                cryp.changeKey(new_key=key)
+                system = cryp.genCode()
+                problem = system[0]
+                answer = system[1]
+                solution = []
+                playEnded = False
+            if counter == 2:
+                escaped = True
+
+            pygame.display.update()
+        management.stopTimer = True
+
+        self.player_1 = toof
+        self.player_2 = stave
+    #End line of Decoding Came
+
+    def play_battleField(self):
+        pass
+        #End line of Battle Field
+
+    def endScene(self):
+        escaped = False
+        while not escaped:
+            self.screen.fill("Black")
+            color_pl1 = "Gray"
+            color_pl2 = "Gray"
+
+            winner = None
+            winner_text = ""
+            if self.player_1.getPoint() > self.player_2.getPoint():
+                winner = self.player_1
+                color_pl1 = "Green"
+                color_pl2 = "Red"
+                winner_text = self.player_1.getName() + ", bu oyunu kazandı! Toplam puan: " + str(self.player_1.getPoint())
+            elif self.player_1.getPoint() < self.player_2.getPoint():
+                winner_text = self.player_2.getName() + ", bu oyunu kazandı! Toplam puan: " + str(self.player_2.getPoint())
+                winner = self.player_2
+                color_pl1 = "Red"
+                color_pl2 = "Green"
+            else:
+                winner = None
+                winner_text = "Oyun Berabere!"
+
+            info_text = self.getFont(25).render("Çıkmak için \"esc\" tuşuna basınız.",True,"White")
+            win_text = self.getFont(25).render(winner_text, True, "White")
+
+            info_rect = info_text.get_rect(center=(self.width()/2, 9*self.height()/10))
+            win_rect = win_text.get_rect(center=(self.width()/2,self.height()/2))
+
+            self.screen.blit(win_text,win_rect)
+            self.screen.blit(info_text,info_rect)
+
+            plyrs = [self.player_1, self.player_2]
+            for i in range(len(plyrs)):
+                name_text = self.getFont(20).render("Oyuncu 1: " + plyrs[i].getName(),True,[color_pl1,color_pl2][i])
+                inv = []
+                for item in plyrs[i].getInventory():
+                    inv.append(item.getName())
+                Inv_text = self.getFont(15).render(str(inv),True,[color_pl1,color_pl2][i])
+                point_text = self.getFont(20).render("Puan: " + str(int(plyrs[i].getPoint())), True, [color_pl1,color_pl2][i])
+
+                name_rect = name_text.get_rect(center =((1+3*i)*self.width()/5, 2*self.height()/10))
+                Inv_rect = Inv_text.get_rect(center=((1+3*i)*self.width()/5, 3*self.height()/10))
+                point_rect = point_text.get_rect(center = ((1+3*i)*self.width()/5, 4*self.height()/10))
+
+                self.screen.blit(name_text,name_rect)
+                self.screen.blit(Inv_text,Inv_rect)
+                self.screen.blit(point_text,point_rect)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    escaped = True
+            pygame.display.update()
+
+    def loadScene(self):
+        self.__isWaiting = True
+        proccess = True
+        x = 5
+        back = pygame.image.load("UIFolder/Assets/LoadPage.png")
+        back = pygame.transform.scale(back, (self.width(),self.height()))
+        back_rect = back.get_rect(center=(self.width()/2,self.height()/2))
+        while proccess:
+            for i in range(x):
+                self.screen.fill("Black")
+                self.screen.blit(back,back_rect)
+
+                text = self.getFont(50).render("Oyun başlıyor: " + str(x-i), True, "Yellow")
+                text_rect = text.get_rect(center=(self.width() / 2, self.height() / 2))
+                self.screen.blit(text,text_rect)
+                pygame.display.update()
+                if x-i == 1:
+                    proccess = False
+                time.sleep(1)
+
+            pygame.display.update()
+    def optionPane(self):
+        escActivated = False
+
+        mode_st = pygame.image.load("UIFolder/Assets/Template/board.png")
+        mode_nd = pygame.image.load("UIFolder/Assets/Template/word.png")
+        mode_rd = pygame.image.load("UIFolder/Assets/Template/number.png")
+
+        defaultTimeList = []
+        for i in range(41):
+            defaultTimeList.append(i*5+100)
+        tIndex = defaultTimeList.index(150)
+
+        mscStr = ""
+        mscClr = "Yellow"
+
+        while not escActivated:
+            self.screen.fill("Black")
+
+            btnList = []
+
+            modeButton = Button(None, (self.width()/2,2*self.height()/5),"Oyun Modu",self.getFont(50),"White","Yellow")
+
+            timeDec = Button(None, (self.width()-300,3*self.height()/5), "<", self.getFont(50),"White","Blue")
+            timeInc = Button(None, (self.width()-100,3*self.height()/5), ">", self.getFont(50),"White","Blue")
+
+            musicOpt = Button(None, (self.width()/2,4*self.height()/5),"Müzik", self.getFont(50),"White","Yellow")
+
+            btnList.append(modeButton)
+            btnList.append(timeInc)
+            btnList.append(timeDec)
+            btnList.append(musicOpt)
+
+            timeOp_text = self.getFont(50).render("Süre Ayarı", True, "Yellow")
+            timeOp_text_r = timeOp_text.get_rect(center=(self.width()/2,3*self.height()/5))
+
+            musicOnOff = self.getFont(35).render(str(mscStr), True, str(mscClr))
+            if self.__musicOn:
+                mscStr = "Açık"
+                mscClr = "Green"
+            else:
+                mscStr = "Kapalı"
+                mscClr = "Gray"
+            music_r = musicOnOff.get_rect(center=(self.width()-200,4*self.height()/5))
+
+            defaultTimeTxt = self.getFont(35).render(str(defaultTimeList[tIndex]),True, "Yellow")
+            defaultTimeTxt_r = defaultTimeTxt.get_rect(center=(self.width()-200,3*self.height()/5))
+
+            self.screen.blit(timeOp_text,timeOp_text_r)
+            self.screen.blit(defaultTimeTxt,defaultTimeTxt_r)
+            self.screen.blit(musicOnOff,music_r)
+
+            for button in btnList:
+                button.update(self.screen)
+                if button.checkForInput(pygame.mouse.get_pos()):
+                    button.changeColor(pygame.mouse.get_pos())
+                    button.update(self.screen)
+
+
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    escActivated = True
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if timeDec.checkForInput(pygame.mouse.get_pos()):
+                        tIndex = (tIndex-1)%len(defaultTimeList)
+                        self.__defaultTime = defaultTimeList[tIndex]
+                    if timeInc.checkForInput(pygame.mouse.get_pos()):
+                        tIndex = (tIndex+1)%len(defaultTimeList)
+                        self.__defaultTime = defaultTimeList[tIndex]
+                    if musicOpt.checkForInput(pygame.mouse.get_pos()):
+                        if self.__musicOn:
+                            self.__musicOn = False
+                        else:
+                            self.__musicOn = True
+
+                    if modeButton.checkForInput(pygame.mouse.get_pos()):
+                        modeExit = False
+                        frameList = []
+                        modes = "Oynama Sırası: "
+                        while not modeExit:
+
+                            self.screen.fill("Black")
+                            btnList_sec = []
+
+                            mode_st_r = mode_st.get_rect(center=(200,2*self.height()/11))
+                            mode_nd_r = mode_nd.get_rect(center=(200,5*self.height()/11))
+                            mode_rd_r = mode_rd.get_rect(center=(200,8*self.height()/11))
+
+                            self.screen.blit(mode_st,mode_st_r)
+                            self.screen.blit(mode_nd,mode_nd_r)
+                            self.screen.blit(mode_rd,mode_rd_r)
+
+                            mode_1 = Button(None,(self.width()/2,2*self.height()/11),"Ekle (1)",self.getFont(50),"White","Green")
+                            mode_2 = Button(None,(self.width()/2,5*self.height()/11),"Ekle (2)",self.getFont(50),"White","Green")
+                            mode_3 = Button(None,(self.width()/2,8*self.height()/11),"Ekle (3)",self.getFont(50),"White","Green")
+                            reset = Button(None, (10*self.width()/11,10*self.height()/11),"Sıfırla",self.getFont(30),"White","Green")
+
+                            modes_txt = self.getFont(30).render(modes,True,"White")
+                            modes_rect = modes_txt.get_rect(center=(self.width()/2,10*self.height()/11))
+                            self.screen.blit(modes_txt,modes_rect)
+
+                            btnList_sec.append(mode_1)
+                            btnList_sec.append(mode_2)
+                            btnList_sec.append(mode_3)
+                            btnList_sec.append(reset)
+
+                            for button_sec in btnList_sec:
+                                button_sec.update(self.screen)
+                                if button_sec.checkForInput(pygame.mouse.get_pos()):
+                                    button_sec.changeColor(pygame.mouse.get_pos())
+                                    button_sec.update(self.screen)
+
+                            for event_sec in pygame.event.get():
+                                if event_sec.type == pygame.KEYDOWN and event_sec.key == pygame.K_ESCAPE:
+                                    if frameList != []:
+                                        frameList.append("endScene")
+                                        self.__gameOrder = frameList
+                                    modeExit = True
+
+                                if event_sec.type == pygame.MOUSEBUTTONDOWN:
+                                    if reset.checkForInput(pygame.mouse.get_pos()):
+                                        frameList = self.__gameOrder
+                                        modes = "Oynama Sırası: "
+                                    if mode_1.checkForInput(pygame.mouse.get_pos()):
+                                        frameList.append("Board")
+                                        modes = modes + "1"
+                                    if mode_2.checkForInput(pygame.mouse.get_pos()):
+                                        frameList.append("Word")
+                                        modes = modes + "2"
+                                    if mode_3.checkForInput(pygame.mouse.get_pos()):
+                                        frameList.append("Number")
+                                        modes = modes + "3"
+
+                                if event_sec.type == pygame.QUIT:
+                                    pygame.quit()
+                                    sys.exit()
+
+                            pygame.display.update()
+
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            pygame.display.update()
+
+    def infoButton(self):
+        pages = []
+        index = 0
+        card = 0
+        for filenames in os.walk("UIFolder/Assets/Slide"):
+            for file in filenames[2]:
+                pages.append(file)
+                card += 1
+        for i in range(card):
+            pages.append(i)
+
+        escPressed = False
+        while not escPressed:
+            self.screen.fill("Black")
+
+            path = "UIFolder/Assets/Slide/" + pages[index]
+            img = pygame.image.load(path)
+            img = pygame.transform.scale(img, (self.width(),self.height()))
+            img_rect = img.get_rect(center=(self.width()/2,self.height()/2))
+
+            self.screen.blit(img,img_rect)
+
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        escPressed = True
+                    if event.key == pygame.K_RIGHT:
+                        index += 1
+                        index %= card
+                    if event.key == pygame.K_LEFT:
+                        index -= 1
+                        index %= card
+
+            pygame.display.update()
+
+    def quitButton(self):
+        pygame.quit()
+        sys.exit()
+
+    def wait(self):
+        self.__isWaiting = True
+        c = 3
+        bg = pygame.image.load("UIFolder/Assets/waitingSceneBG.png")
+        bg = pygame.transform.scale(bg, (self.width(),self.height()))
+        bgr = bg.get_rect(center=(self.width()/2,self.height()/2))
+        while not (c < 0):
+            self.screen.blit(bg,bgr)
+            text = self.getFont(35).render("Hazır Ol! " + str(c),True,"Pink")
+            text_rect = text.get_rect(center=(self.width()/2,self.height()/2))
+            self.screen.blit(text,text_rect)
+            time.sleep(1)
+            c -= 1
+            pygame.display.update()
+
+#Main
+window = Window()
